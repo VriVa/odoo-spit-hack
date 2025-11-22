@@ -315,7 +315,7 @@ const SingleReceiptPage = () => {
   };
 
   const handleBack = () => {
-    navigate('/operations/receipts');
+    navigate('/receipts');
   };
 
   if (loading) {
