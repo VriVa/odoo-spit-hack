@@ -19,3 +19,13 @@ def read_root():
 from app.routes import userManager
 
 app.include_router(userManager.router)
+
+# Include product manager routes
+from app.routes import productManager
+
+app.include_router(productManager.router)
+
+# Include warehouse manager routes
+from app.routes import warehouseManager
+
+app.include_router(warehouseManager.router)
