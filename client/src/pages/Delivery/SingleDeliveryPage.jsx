@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import {
   ArrowLeft,
   Package,
@@ -13,25 +14,105 @@ import {
   MapPin,
   User,
   Warehouse,
+  Loader2
 } from 'lucide-react';
-import {
-  getTransaction,
-  getTransactionLines,
-  getWarehouses,
-  getProducts,
-  getUsers,
-  getStock,
-} from '../../services/api';
+
+// --- API SERVICE LAYER (Integrated) ---
+
+const API_URL = 'http://localhost:8000';
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+const handleApiError = (error) => {
+  if (error.response) {
+    throw new Error(error.response.data.detail || 'An error occurred');
+  } else if (error.request) {
+    throw new Error('No response from server. Please check your connection.');
+  } else {
+    throw new Error(error.message);
+  }
+};
+
+const deliveryService = {
+  getById: async (id) => {
+    try {
+      // Fetch all deliveries and find the specific one
+      const response = await api.get('/dashboard/transactions', { 
+        params: { txn_type: 'delivery' } 
+      });
+      const delivery = response.data.find(t => t.id === parseInt(id));
+      if (!delivery) throw new Error('Delivery not found');
+      return delivery;
+    } catch (error) {
+      handleApiError(error);
+    }
+  },
+  validate: async (id) => {
+    try {
+      const response = await api.post(`/products/validate_transaction/${id}`);
+      return response.data;
+    } catch (error) {
+      handleApiError(error);
+    }
+  }
+};
+
+const warehouseService = {
+  getAll: async () => {
+    try {
+      const response = await api.get('/warehouses/');
+      return response.data;
+    } catch (error) {
+      console.warn("Failed to fetch warehouses", error);
+      return [];
+    }
+  },
+};
+
+const productService = {
+  // Returns { products: [...], stock: [...] }
+  getData: async () => {
+    try {
+      const response = await api.get('/products/');
+      return {
+        products: response.data[0] || [],
+        stock: response.data[1] || []
+      };
+    } catch (error) {
+      console.warn("Failed to fetch products/stock", error);
+      return { products: [], stock: [] };
+    }
+  },
+};
+
+const userService = {
+  getAll: async () => {
+    try {
+      const response = await api.get('/users/');
+      return response.data;
+    } catch (error) {
+      console.warn("Failed to fetch users", error);
+      return [];
+    }
+  },
+};
+
+// --- COMPONENT CODE ---
 
 const STATUS_CONFIG = {
   draft: { label: 'Draft', bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300' },
-  waiting: { label: 'Waiting', bg: 'bg-teal-100', text: 'text-teal-700', border: 'border-teal-300' },
   ready: { label: 'Ready', bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-300' },
   done: { label: 'Done', bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300' },
   canceled: { label: 'Canceled', bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300' },
 };
 
-const STATUS_FLOW = ['draft', 'waiting', 'ready', 'done'];
+// Adjusted flow to match backend realities
+const STATUS_FLOW = ['ready', 'done'];
 
 const theme = {
   bg: '#FBF8F4',
@@ -45,7 +126,10 @@ const theme = {
 };
 
 const StatusBadge = ({ status }) => {
-  const config = STATUS_CONFIG[status] || STATUS_CONFIG.draft;
+  // Backend uses 'waiting' or 'ready' for initial state, mapped to 'ready' config here
+  const normalizedStatus = status === 'waiting' ? 'ready' : (status || 'draft');
+  const config = STATUS_CONFIG[normalizedStatus] || STATUS_CONFIG.draft;
+  
   return (
     <span className={`inline-flex px-3 py-1.5 text-sm font-semibold rounded-full ${config.bg} ${config.text}`}>
       {config.label}
@@ -54,8 +138,9 @@ const StatusBadge = ({ status }) => {
 };
 
 const StatusStepper = ({ currentStatus }) => {
-  const currentIndex = STATUS_FLOW.indexOf(currentStatus);
-  const isCanceled = currentStatus === 'canceled';
+  const normalizedStatus = currentStatus === 'waiting' ? 'ready' : (currentStatus || 'ready');
+  const currentIndex = STATUS_FLOW.indexOf(normalizedStatus);
+  const isCanceled = normalizedStatus === 'canceled';
 
   return (
     <div className="flex items-center gap-1 text-xs font-medium">
@@ -108,34 +193,44 @@ const SingleDeliveryPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
+  // Data State
   const [transaction, setTransaction] = useState(null);
   const [transactionLines, setTransactionLines] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
   const [users, setUsers] = useState([]);
-  const [stock, setStock] = useState([]);
+  const [allStock, setAllStock] = useState([]);
+  
+  // UI State
   const [loading, setLoading] = useState(true);
-  const [localStatus, setLocalStatus] = useState(null);
+  const [validating, setValidating] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [txData, linesData, whData, prodData, userData, stockData] = await Promise.all([
-          getTransaction(id),
-          getTransactionLines(id),
-          getWarehouses(),
-          getProducts(),
-          getUsers(),
-          getStock(),
+        const [txData, whData, prodData, userData] = await Promise.all([
+          deliveryService.getById(id),
+          warehouseService.getAll(),
+          productService.getData(),
+          userService.getAll(),
         ]);
+
         setTransaction(txData);
-        setTransactionLines(linesData);
         setWarehouses(whData);
-        setProducts(prodData);
+        setProducts(prodData.products);
+        setAllStock(prodData.stock);
         setUsers(userData);
-        setStock(stockData);
-        setLocalStatus(txData?.status);
+
+        // Adapt single transaction to lines array for UI consistency
+        if (txData && txData.product_id) {
+          setTransactionLines([{
+            id: `line-${txData.id}`,
+            product_id: txData.product_id,
+            quantity: txData.quantity
+          }]);
+        }
+
       } catch (err) {
         console.error('Failed to fetch delivery data:', err);
       } finally {
@@ -166,45 +261,65 @@ const SingleDeliveryPage = () => {
     }, {});
   }, [users]);
 
-  const stockMap = useMemo(() => {
-    return stock.reduce((acc, item) => {
-      acc[item.product_id] = (acc[item.product_id] || 0) + (item.quantity || 0);
-      return acc;
-    }, {});
-  }, [stock]);
+  // IMPORTANT: Filter stock map to only show availability for the Source Warehouse
+  const sourceWarehouseStockMap = useMemo(() => {
+    if (!transaction) return {};
+    
+    return allStock
+      .filter(s => s.warehouse_id === transaction.from_warehouse)
+      .reduce((acc, item) => {
+        // Use 'free_to_use' for accurate availability
+        acc[item.product_id] = (acc[item.product_id] || 0) + (item.free_to_use || 0);
+        return acc;
+      }, {});
+  }, [allStock, transaction]);
 
-  const currentStatus = localStatus || transaction?.status || 'draft';
-  const isEditable = currentStatus === 'draft';
+  const currentStatus = transaction?.status || 'ready';
+  const isEditable = currentStatus === 'waiting' || currentStatus === 'ready';
+  const isDone = currentStatus === 'done';
   const isCanceled = currentStatus === 'canceled';
 
-  const handleValidate = useCallback(() => {
-    if (isEditable) {
-      setLocalStatus('ready');
+  const handleValidate = useCallback(async () => {
+    if (!isEditable) return;
+    
+    if(!window.confirm("Confirm delivery? This will deduct stock from the warehouse.")) return;
+
+    setValidating(true);
+    try {
+      const updatedTx = await deliveryService.validate(id);
+      setTransaction(updatedTx);
+      alert("Delivery validated successfully. Stock updated.");
+    } catch (error) {
+      alert(`Validation failed: ${error.message}`);
+    } finally {
+      setValidating(false);
     }
-  }, [isEditable]);
+  }, [isEditable, id]);
 
   const handleCancel = useCallback(() => {
-    if (!isCanceled && currentStatus !== 'done') {
-      setLocalStatus('canceled');
+    if (!isCanceled && !isDone) {
+        // Backend doesn't support cancel yet
+        alert("Cancellation not yet supported by server.");
     }
-  }, [isCanceled, currentStatus]);
+  }, [isCanceled, isDone]);
 
   const handlePrint = useCallback(() => {
     window.print();
   }, []);
 
   const handleBack = useCallback(() => {
-    navigate('/deliveries');
+    navigate('/operations/deliveries');
   }, [navigate]);
 
   const handleAddProduct = useCallback(() => {
-    navigate(`/deliveries/${id}/add-line`);
-  }, [navigate, id]);
+    // Navigate to add product page (not implemented in MVP)
+    alert("Editing lines not supported in this version.");
+  }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen p-4 md:p-6" style={{ backgroundColor: theme.bg }}>
-        <div className="max-w-5xl mx-auto">
+      <div className="w-full h-screen bg-[#FBF8F4] pt-16">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           <SkeletonBlock className="h-10 w-48 mb-6" />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1">
@@ -221,7 +336,7 @@ const SingleDeliveryPage = () => {
 
   if (!transaction) {
     return (
-      <div className="min-h-screen p-4 md:p-6 flex items-center justify-center" style={{ backgroundColor: theme.bg }}>
+      <div className="w-full h-screen bg-[#FBF8F4] pt-16 flex items-center justify-center">
         <div className="text-center">
           <Package size={48} style={{ color: theme.textLight }} className="mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2" style={{ color: theme.text }}>
@@ -240,8 +355,8 @@ const SingleDeliveryPage = () => {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-6 pt-16" style={{ backgroundColor: theme.bg }}>
-      <div className="max-w-5xl mx-auto">
+    <div className="w-full h-screen bg-[#FBF8F4] pt-16">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Header */}
         <div className="flex flex-col gap-4 mb-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -265,7 +380,7 @@ const SingleDeliveryPage = () => {
                     Delivery
                   </h1>
                   <p className="text-sm font-medium" style={{ color: theme.textLight }}>
-                    {transaction.reference_number}
+                    {transaction.reference_number || `ID: ${transaction.id}`}
                   </p>
                 </div>
               </div>
@@ -276,19 +391,18 @@ const SingleDeliveryPage = () => {
           {/* Action Buttons & Status Stepper */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={handleValidate}
-                disabled={!isEditable}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg border font-medium text-sm transition-colors ${
-                  isEditable
-                    ? 'hover:bg-green-50 border-green-300 text-green-700'
-                    : 'opacity-50 cursor-not-allowed'
-                }`}
-                style={!isEditable ? { borderColor: theme.border, color: theme.textLight } : {}}
-              >
-                <Check size={16} />
-                Validate
-              </button>
+              {/* Validate Button */}
+              {isEditable && !isCanceled && (
+                  <button
+                    onClick={handleValidate}
+                    disabled={validating}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border font-medium text-sm transition-colors hover:bg-green-50 border-green-300 text-green-700 disabled:opacity-50`}
+                  >
+                    {validating ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                    Validate
+                  </button>
+              )}
+              
               <button
                 onClick={handlePrint}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg border font-medium text-sm transition-colors hover:bg-gray-50"
@@ -297,16 +411,18 @@ const SingleDeliveryPage = () => {
                 <Printer size={16} />
                 Print
               </button>
+
+              {/* Cancel Button (Visual only for now) */}
               <button
                 onClick={handleCancel}
-                disabled={isCanceled || currentStatus === 'done'}
+                disabled={isCanceled || isDone}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border font-medium text-sm transition-colors ${
-                  !isCanceled && currentStatus !== 'done'
+                  !isCanceled && !isDone
                     ? 'hover:bg-red-50 border-red-300 text-red-700'
                     : 'opacity-50 cursor-not-allowed'
                 }`}
                 style={
-                  isCanceled || currentStatus === 'done'
+                  isCanceled || isDone
                     ? { borderColor: theme.border, color: theme.textLight }
                     : {}
                 }
@@ -334,7 +450,7 @@ const SingleDeliveryPage = () => {
                 <InfoField
                   icon={MapPin}
                   label="Delivery Address"
-                  value={transaction.delivery_address || transaction.contact}
+                  value={transaction.delivery_address || transaction.contact || "No address provided"}
                 />
                 <InfoField
                   icon={User}
@@ -342,17 +458,20 @@ const SingleDeliveryPage = () => {
                   value={userMap[transaction.created_by]}
                 />
                 <InfoField icon={Truck} label="Operation Type" value="Delivery" />
-                <InfoField icon={Calendar} label="Schedule Date" value={transaction.scheduled_date} />
+                <InfoField icon={Calendar} label="Schedule Date" value={new Date(transaction.scheduled_date).toLocaleString()} />
                 <InfoField
                   icon={Warehouse}
                   label="Warehouse From"
                   value={warehouseMap[transaction.from_warehouse]}
                 />
-                <InfoField
-                  icon={Warehouse}
-                  label="Warehouse To"
-                  value={warehouseMap[transaction.to_warehouse]}
-                />
+                {/* Deliveries usually don't have To Warehouse unless internal, but keeping for completeness */}
+                {transaction.to_warehouse && (
+                    <InfoField
+                    icon={Warehouse}
+                    label="Warehouse To"
+                    value={warehouseMap[transaction.to_warehouse]}
+                    />
+                )}
               </div>
             </div>
           </div>
@@ -373,8 +492,9 @@ const SingleDeliveryPage = () => {
                 {isEditable && (
                   <button
                     onClick={handleAddProduct}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90 opacity-50 cursor-not-allowed"
                     style={{ backgroundColor: theme.text }}
+                    title="Adding lines not supported in this version"
                   >
                     <Plus size={14} />
                     Add Product
@@ -393,17 +513,14 @@ const SingleDeliveryPage = () => {
                         Quantity
                       </th>
                       <th className="px-5 py-3 text-center font-semibold" style={{ color: theme.textMedium }}>
-                        Stock
-                      </th>
-                      <th className="px-5 py-3 text-right font-semibold" style={{ color: theme.textMedium }}>
-                        Unit Cost
+                        Availability (Source)
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {transactionLines.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-5 py-12 text-center">
+                        <td colSpan={3} className="px-5 py-12 text-center">
                           <Package size={32} style={{ color: theme.textLight }} className="mx-auto mb-2" />
                           <p className="text-sm" style={{ color: theme.textLight }}>
                             No products added yet
@@ -413,8 +530,8 @@ const SingleDeliveryPage = () => {
                     ) : (
                       transactionLines.map((line) => {
                         const product = productMap[line.product_id] || {};
-                        const availableStock = stockMap[line.product_id] || 0;
-                        const isInsufficient = availableStock < line.quantity;
+                        const availableStock = sourceWarehouseStockMap[line.product_id] || 0;
+                        const isInsufficient = availableStock < line.quantity && !isDone; // Only show warning if not yet done
 
                         return (
                           <tr
@@ -440,7 +557,9 @@ const SingleDeliveryPage = () => {
                             </td>
                             <td className="px-5 py-4">
                               <div className="flex items-center justify-center gap-1.5">
-                                {isInsufficient ? (
+                                {isDone ? (
+                                     <span className="text-xs font-medium text-green-600">Processed</span>
+                                ) : isInsufficient ? (
                                   <>
                                     <AlertTriangle size={14} style={{ color: theme.danger }} />
                                     <span className="text-xs font-medium" style={{ color: theme.danger }}>
@@ -456,9 +575,6 @@ const SingleDeliveryPage = () => {
                                   </>
                                 )}
                               </div>
-                            </td>
-                            <td className="px-5 py-4 text-right" style={{ color: theme.textMedium }}>
-                              {product.unit_cost ? `$${product.unit_cost.toFixed(2)}` : '-'}
                             </td>
                           </tr>
                         );

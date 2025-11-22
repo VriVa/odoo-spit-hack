@@ -320,7 +320,7 @@ const SingleReceiptPage = () => {
 
   if (loading) {
     return (
-      <div className="w-full min-h-[calc(100vh-64px)] bg-[#FBF8F4] ">
+      <div className="w-full h-screen bg-[#FBF8F4] pt-16">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           <PageSkeleton />
         </div>
@@ -330,7 +330,7 @@ const SingleReceiptPage = () => {
 
   if (!receipt) {
     return (
-      <div className="w-full min-h-[calc(100vh-64px)] bg-[#FBF8F4] flex items-center justify-center pt-16">
+      <div className="w-full h-screen bg-[#FBF8F4] pt-16 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-[#3E2723] mb-2">Receipt not found</h2>
           <button 
@@ -349,7 +349,7 @@ const SingleReceiptPage = () => {
   const isDone = receipt.status === 'done';
 
   return (
-    <div className="w-full min-h-[calc(100vh-64px)] bg-[#FBF8F4] pt-16 md:pt-8">
+    <div className="w-full h-screen bg-[#FBF8F4] pt-16">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         
         {/* Header */}
