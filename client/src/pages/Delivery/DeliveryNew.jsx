@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import {
   ArrowLeft,
   Truck,
@@ -13,7 +14,89 @@ import {
   Loader2,
 } from 'lucide-react';
 
+// --- API SERVICE LAYER (Integrated) ---
 
+// Change this to your actual FastAPI URL
+const API_URL = 'http://localhost:8000';
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Error handling helper
+const handleApiError = (error) => {
+  if (error.response) {
+    throw new Error(error.response.data.detail || 'An error occurred');
+  } else if (error.request) {
+    throw new Error('No response from server. Please check your connection.');
+  } else {
+    throw new Error(error.message);
+  }
+};
+
+const warehouseService = {
+  getAll: async () => {
+    try {
+      const response = await api.get('/warehouses/');
+      return response.data;
+    } catch (error) {
+      handleApiError(error);
+    }
+  },
+};
+
+const userService = {
+  getAll: async () => {
+    try {
+      // Attempt to fetch users; fall back gracefully if endpoint doesn't exist
+      const response = await api.get('/users/'); 
+      return response.data;
+    } catch (error) {
+      console.warn("Could not fetch users (Endpoint might be missing or error occurred)");
+      return []; 
+    }
+  },
+};
+
+const productService = {
+  // The backend returns [products_list, stock_list]
+  getData: async () => {
+    try {
+      const response = await api.get('/products/');
+      return {
+        products: response.data[0],
+        stock: response.data[1]
+      };
+    } catch (error) {
+      handleApiError(error);
+    }
+  },
+
+  // Backend expects Query Parameters for this specific endpoint
+  createDelivery: async (data) => {
+    try {
+      const params = {
+        product_id: data.product_id,
+        quantity: data.quantity,
+        from_warehouse_id: data.from_warehouse_id,
+        scheduled_date: data.scheduled_date,
+        user_id: data.user_id,
+        delivery_address: data.delivery_address
+      };
+
+      // POST with null body, data in query params
+      const response = await api.post('/products/create_delivery_order/', null, { params });
+      return response.data;
+    } catch (error) {
+      handleApiError(error);
+    }
+  },
+};
+
+// --- COMPONENT CODE ---
 
 const theme = {
   bg: '#FBF8F4',
@@ -43,7 +126,7 @@ const Toast = ({ message, type, onClose }) => {
 
   return (
     <div
-      className="fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border animate-in slide-in-from-top-2"
+      className="fixed top-20 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border animate-in slide-in-from-top-2"
       style={{ backgroundColor: bgColor, borderColor: textColor }}
     >
       <Icon size={18} style={{ color: textColor }} />
@@ -74,9 +157,13 @@ const FormField = ({ label, icon: Icon, error, children, required }) => (
 const DeliveryCreatePage = () => {
   const navigate = useNavigate();
 
+  // Data State
   const [products, setProducts] = useState([]);
+  const [allStock, setAllStock] = useState([]); // Holds the raw stock list from backend
   const [warehouses, setWarehouses] = useState([]);
   const [users, setUsers] = useState([]);
+  
+  // UI State
   const [loadingData, setLoadingData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
@@ -91,34 +178,29 @@ const DeliveryCreatePage = () => {
   });
 
   const [errors, setErrors] = useState({});
-  const [stockInfo, setStockInfo] = useState({ available: null, checking: false });
 
+  // Initial Data Fetch
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoadingData(true);
-        const [productsRes, warehousesRes, usersRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/products/`),
-          fetch(`${API_BASE_URL}/warehouses/`),
-          fetch(`${API_BASE_URL}/users/`),
+        
+        // Parallel fetching using the integrated service layer
+        const [productData, warehouseData, userData] = await Promise.all([
+          productService.getData(),
+          warehouseService.getAll(),
+          userService.getAll()
         ]);
 
-        if (!productsRes.ok || !warehousesRes.ok || !usersRes.ok) {
-          throw new Error('Failed to fetch form data');
-        }
+        // Map backend data to state
+        setProducts(productData.products || []);
+        setAllStock(productData.stock || []);
+        setWarehouses(warehouseData || []);
+        setUsers(userData || []);
 
-        const [productsData, warehousesData, usersData] = await Promise.all([
-          productsRes.json(),
-          warehousesRes.json(),
-          usersRes.json(),
-        ]);
-
-        setProducts(productsData);
-        setWarehouses(warehousesData);
-        setUsers(usersData);
       } catch (err) {
         console.error('Error fetching data:', err);
-        setToast({ message: 'Failed to load form data', type: 'error' });
+        setToast({ message: err.message || 'Failed to load form data', type: 'error' });
       } finally {
         setLoadingData(false);
       }
@@ -126,32 +208,18 @@ const DeliveryCreatePage = () => {
     fetchData();
   }, []);
 
-  const checkStock = useCallback(async (productId) => {
-    if (!productId) {
-      setStockInfo({ available: null, checking: false });
-      return;
-    }
+  // Calculate Stock Availability dynamically
+  // Logic: Filter allStock based on selected product AND selected warehouse
+  const availableStock = useMemo(() => {
+    if (!formData.product_id || !formData.from_warehouse_id) return null;
 
-    try {
-      setStockInfo((prev) => ({ ...prev, checking: true }));
-      const res = await fetch(`${API_BASE_URL}/products/${productId}/stock`);
-      if (res.ok) {
-        const data = await res.json();
-        setStockInfo({ available: data.quantity ?? data.stock ?? data, checking: false });
-      } else {
-        setStockInfo({ available: null, checking: false });
-      }
-    } catch (err) {
-      console.error('Error checking stock:', err);
-      setStockInfo({ available: null, checking: false });
-    }
-  }, []);
+    const stockEntry = allStock.find(s => 
+      s.product_id === parseInt(formData.product_id) && 
+      s.warehouse_id === parseInt(formData.from_warehouse_id)
+    );
 
-  useEffect(() => {
-    if (formData.product_id) {
-      checkStock(formData.product_id);
-    }
-  }, [formData.product_id, checkStock]);
+    return stockEntry ? stockEntry.free_to_use : 0;
+  }, [formData.product_id, formData.from_warehouse_id, allStock]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -164,28 +232,20 @@ const DeliveryCreatePage = () => {
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.product_id) {
-      newErrors.product_id = 'Product is required';
-    }
-
+    if (!formData.product_id) newErrors.product_id = 'Product is required';
+    
     if (!formData.quantity || parseFloat(formData.quantity) <= 0) {
       newErrors.quantity = 'Quantity must be greater than 0';
     }
 
-    if (!formData.from_warehouse_id) {
-      newErrors.from_warehouse_id = 'Warehouse is required';
-    }
+    if (!formData.from_warehouse_id) newErrors.from_warehouse_id = 'Warehouse is required';
+    if (!formData.scheduled_date) newErrors.scheduled_date = 'Scheduled date is required';
 
-    if (!formData.scheduled_date) {
-      newErrors.scheduled_date = 'Scheduled date is required';
-    }
-
-    if (
-      stockInfo.available !== null &&
-      formData.quantity &&
-      parseFloat(formData.quantity) > stockInfo.available
-    ) {
-      newErrors.quantity = `Insufficient stock. Available: ${stockInfo.available}`;
+    // Stock validation
+    if (availableStock !== null && formData.quantity) {
+      if (parseFloat(formData.quantity) > availableStock) {
+        newErrors.quantity = `Insufficient stock. Available: ${availableStock}`;
+      }
     }
 
     setErrors(newErrors);
@@ -200,32 +260,29 @@ const DeliveryCreatePage = () => {
     try {
       setSubmitting(true);
 
-      const scheduledDateTime = new Date(formData.scheduled_date).toISOString();
-
+      // Prepare payload ensuring types match FastAPI expectations
       const payload = {
         product_id: parseInt(formData.product_id, 10),
         quantity: parseFloat(formData.quantity),
         from_warehouse_id: parseInt(formData.from_warehouse_id, 10),
-        scheduled_date: scheduledDateTime,
-        delivery_address: formData.delivery_address || null,
+        scheduled_date: new Date(formData.scheduled_date).toISOString(),
+        delivery_address: formData.delivery_address || '',
         user_id: formData.user_id ? parseInt(formData.user_id, 10) : null,
       };
 
-      const res = await fetch(`${API_BASE_URL}/products/create_delivery_order/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.detail || errorData.message || 'Failed to create delivery order');
-      }
+      await productService.createDelivery(payload);
 
       setToast({ message: 'Delivery Order Created Successfully', type: 'success' });
 
       setTimeout(() => {
-        navigate('/deliveries');
+        setFormData({
+            product_id: '',
+            quantity: '',
+            from_warehouse_id: '',
+            scheduled_date: '',
+            delivery_address: '',
+            user_id: '',
+        })
       }, 1500);
     } catch (err) {
       console.error('Submit error:', err);
@@ -235,22 +292,18 @@ const DeliveryCreatePage = () => {
     }
   };
 
-  const handleBack = () => {
-    navigate('/deliveries');
-  };
-
   const isStockInsufficient =
-    stockInfo.available !== null &&
+    availableStock !== null &&
     formData.quantity &&
-    parseFloat(formData.quantity) > stockInfo.available;
+    parseFloat(formData.quantity) > availableStock;
 
-  const isSubmitDisabled = submitting || isStockInsufficient || stockInfo.checking;
+  const isSubmitDisabled = submitting || isStockInsufficient;
 
-  const inputClasses = `w-full px-3 py-2.5 rounded-lg border text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-opacity-50`;
+  const inputClasses = `w-full px-3 py-2.5 rounded-lg border text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#5D4037] focus:border-transparent`;
 
   if (loadingData) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: theme.bg }}>
+      <div className="w-full h-screen bg-[#FBF8F4] pt-16 flex items-center justify-center">
         <div className="flex items-center gap-3">
           <Loader2 size={24} className="animate-spin" style={{ color: theme.textMedium }} />
           <span style={{ color: theme.textMedium }}>Loading form data...</span>
@@ -260,14 +313,14 @@ const DeliveryCreatePage = () => {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-6" style={{ backgroundColor: theme.bg }}>
+    <div className="w-full h-screen bg-[#FBF8F4] pt-16">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <button
-            onClick={handleBack}
+            onClick={() => navigate(-1)}
             className="w-10 h-10 rounded-lg border flex items-center justify-center transition-colors hover:bg-white"
             style={{ borderColor: theme.border }}
           >
@@ -298,6 +351,29 @@ const DeliveryCreatePage = () => {
             style={{ backgroundColor: theme.card, borderColor: theme.border }}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              
+              {/* From Warehouse */}
+              <FormField label="From Warehouse" icon={Warehouse} error={errors.from_warehouse_id} required>
+                <select
+                  name="from_warehouse_id"
+                  value={formData.from_warehouse_id}
+                  onChange={handleChange}
+                  className={inputClasses}
+                  style={{
+                    borderColor: errors.from_warehouse_id ? theme.danger : theme.border,
+                    backgroundColor: theme.inputBg,
+                    color: theme.text,
+                  }}
+                >
+                  <option value="">Select warehouse</option>
+                  {warehouses.map((wh) => (
+                    <option key={wh.id} value={wh.id}>
+                      {wh.name}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+
               {/* Product */}
               <FormField label="Product" icon={Package} error={errors.product_id} required>
                 <select
@@ -318,17 +394,20 @@ const DeliveryCreatePage = () => {
                     </option>
                   ))}
                 </select>
-                {stockInfo.checking && (
-                  <p className="text-xs flex items-center gap-1" style={{ color: theme.textLight }}>
-                    <Loader2 size={12} className="animate-spin" /> Checking stock...
-                  </p>
+                
+                {/* Stock Display Logic */}
+                {!formData.from_warehouse_id && formData.product_id && (
+                    <p className="text-xs mt-1" style={{ color: theme.textLight }}>
+                        Select a warehouse to see availability.
+                    </p>
                 )}
-                {stockInfo.available !== null && !stockInfo.checking && (
+                
+                {availableStock !== null && (
                   <p
-                    className="text-xs"
+                    className="text-xs mt-1"
                     style={{ color: isStockInsufficient ? theme.danger : theme.success }}
                   >
-                    Available stock: {stockInfo.available}
+                    Available stock: {availableStock}
                   </p>
                 )}
               </FormField>
@@ -350,28 +429,6 @@ const DeliveryCreatePage = () => {
                     color: theme.text,
                   }}
                 />
-              </FormField>
-
-              {/* From Warehouse */}
-              <FormField label="From Warehouse" icon={Warehouse} error={errors.from_warehouse_id} required>
-                <select
-                  name="from_warehouse_id"
-                  value={formData.from_warehouse_id}
-                  onChange={handleChange}
-                  className={inputClasses}
-                  style={{
-                    borderColor: errors.from_warehouse_id ? theme.danger : theme.border,
-                    backgroundColor: theme.inputBg,
-                    color: theme.text,
-                  }}
-                >
-                  <option value="">Select warehouse</option>
-                  {warehouses.map((wh) => (
-                    <option key={wh.id} value={wh.id}>
-                      {wh.name}
-                    </option>
-                  ))}
-                </select>
               </FormField>
 
               {/* Scheduled Date */}
@@ -404,11 +461,15 @@ const DeliveryCreatePage = () => {
                   }}
                 >
                   <option value="">Select user (optional)</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.full_name || user.name}
-                    </option>
-                  ))}
+                  {users.length > 0 ? (
+                      users.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.full_name || user.name || user.email}
+                        </option>
+                      ))
+                  ) : (
+                      <option disabled>No users found (API missing)</option>
+                  )}
                 </select>
               </FormField>
 
@@ -445,7 +506,7 @@ const DeliveryCreatePage = () => {
                   </p>
                   <p className="text-xs" style={{ color: theme.danger }}>
                     Requested quantity ({formData.quantity}) exceeds available stock (
-                    {stockInfo.available}). Please reduce the quantity.
+                    {availableStock}) in this warehouse.
                   </p>
                 </div>
               </div>
@@ -455,7 +516,7 @@ const DeliveryCreatePage = () => {
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
-                onClick={handleBack}
+                onClick={() => navigate(-1)}
                 className="px-5 py-2.5 rounded-lg border font-medium text-sm transition-colors hover:bg-gray-50"
                 style={{ borderColor: theme.border, color: theme.textMedium }}
               >
@@ -464,15 +525,9 @@ const DeliveryCreatePage = () => {
               <button
                 type="submit"
                 disabled={isSubmitDisabled}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#3E2723]"
                 style={{
-                  backgroundColor: isSubmitDisabled ? theme.textLight : theme.button,
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSubmitDisabled) e.currentTarget.style.backgroundColor = theme.buttonHover;
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSubmitDisabled) e.currentTarget.style.backgroundColor = theme.button;
+                  backgroundColor: theme.button,
                 }}
               >
                 {submitting ? (
