@@ -7,40 +7,47 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 @router.get("/kpis")
 def get_dashboard_kpis(session: Session = Depends(get_session)):
-    
-    total_products = session.exec(select(Product)).count()
-    
-    low_stock_items = session.exec(
-        select(Stock).where(Stock.free_to_use <= 5)
-    ).count()
-    
-    pending_receipts = session.exec(
-        select(Transaction).where(
-            Transaction.type == TxnType.receipt,
-            Transaction.status.in_([TxnStatus.waiting, TxnStatus.ready])
-        )
-    ).count()
-    
-    pending_deliveries = session.exec(
-        select(Transaction).where(
-            Transaction.type == TxnType.delivery,
-            Transaction.status.in_([TxnStatus.waiting, TxnStatus.ready])
-        )
-    ).count()
-    
-    internal_transfers = session.exec(
-        select(Transaction).where(
-            Transaction.type == TxnType.internal_adjustment,
-            Transaction.status == TxnStatus.waiting
-        )
-    ).count()
-    
+    total_products = len(session.exec(select(Product)).all())
+
+    low_stock_items = len(
+        session.exec(
+            select(Stock).where(Stock.free_to_use <= 5)
+        ).all()
+    )
+
+    pending_receipts = len(
+        session.exec(
+            select(Transaction).where(
+                Transaction.type == TxnType.receipt,
+                Transaction.status.in_([TxnStatus.waiting, TxnStatus.ready])
+            )
+        ).all()
+    )
+
+    pending_deliveries = len(
+        session.exec(
+            select(Transaction).where(
+                Transaction.type == TxnType.delivery,
+                Transaction.status.in_([TxnStatus.waiting, TxnStatus.ready])
+            )
+        ).all()
+    )
+
+    internal_transfers = len(
+        session.exec(
+            select(Transaction).where(
+                Transaction.type == TxnType.internal_adjustment,
+                Transaction.status == TxnStatus.waiting
+            )
+        ).all()
+    )
+
     return {
-        "total_products" : total_products,
-        "low_stock_items" : low_stock_items,
-        "pending_receipts" : pending_receipts,
-        "pending_deliveries" : pending_deliveries,
-        "internal_transfers" : internal_transfers  
+        "total_products": total_products,
+        "low_stock_items": low_stock_items,
+        "pending_receipts": pending_receipts,
+        "pending_deliveries": pending_deliveries,
+        "internal_transfers": internal_transfers,
     }
     
 @router.get("/transactions")
