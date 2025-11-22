@@ -1,48 +1,47 @@
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import Navbar from "./components/Navbar";
-import ProtectedRoute from "./components/ProtectedRoute";
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import Navbar from './components/Navbar'
+import ProtectedRoute from './components/ProtectedRoute'
 
 // Auth pages
-import LoginPage from "./pages/Auth/LoginPage";
-import SignupPage from "./pages/Auth/SignupPage";
+import LoginPage from './pages/Auth/LoginPage'
+import SignupPage from './pages/Auth/SignupPage'
 
 // Pages
-import DashboardPage from "./pages/Dashboard/DashboardPage";
+import DashboardPage from './pages/Dashboard/DashboardPage'
 
-import DeliveryListPage from "./pages/Delivery/DeliveryListPage";
-import SingleDeliveryPage from "./pages/Delivery/SingleDeliveryPage";
+import DeliveryListPage from './pages/Delivery/DeliveryListPage'
+import SingleDeliveryPage from './pages/Delivery/SingleDeliveryPage'
 
-import AdjustmentsListPage from "./pages/Adjustments/AdjustmentsListPage";
-import SingleAdjustmentPage from "./pages/Adjustments/SingleAdjustmentPage";
+import AdjustmentsListPage from './pages/Adjustments/AdjustmentsListPage'
+import SingleAdjustmentPage from './pages/Adjustments/SingleAdjustmentPage'
 
-import MoveHistoryPage from "./pages/MoveHistory/MoveHistoryPage";
+import MoveHistoryPage from './pages/MoveHistory/MoveHistoryPage'
 
-import ReceiptsListPage from "./pages/Receipts/ReceiptsListPage";
-import SingleReceiptPage from "./pages/Receipts/SingleReceiptPage";
+import ReceiptsListPage from './pages/Receipts/ReceiptsListPage'
+import SingleReceiptPage from './pages/Receipts/SingleReceiptPage'
 
-import SettingsPage from "./pages/Settings/Settings";
+import SettingsPage from './pages/Settings/Settings'
 
-import StockListPage from "./pages/Stock/StockListPage";
-import StockOperationsPage from "./pages/Stock/StockOperationsPage";
+import StockListPage from './pages/Stock/StockListPage'
+import StockOperationsPage from './pages/Stock/StockOperationsPage'
 
-import WarehouseListPage from "./pages/Warehouse/WarehouseListPage";
-import WarehouseDetailsPage from "./pages/Warehouse/WarehouseDetailsPage";
-import ReceiptsNew from "./pages/Receipts/ReceiptsNew";
-import DeliveryNew from "./pages/Delivery/DeliveryNew";
+import WarehouseListPage from './pages/Warehouse/WarehouseListPage'
+import WarehouseDetailsPage from './pages/Warehouse/WarehouseDetailsPage'
+import ReceiptsNew from './pages/Receipts/ReceiptsNew'
+import DeliveryNew from './pages/Delivery/DeliveryNew'
+import ProductOperations from './pages/Stock/ProductOperations'
 // Layout wrapper (hide navbar on login/signup)
 function Layout({ children }) {
-  const location = useLocation();
+  const location = useLocation()
   const hideNavbar =
-  location.pathname === "/" || 
-  location.pathname.startsWith("/sign-in");
-
+    location.pathname === '/' || location.pathname.startsWith('/sign-in')
 
   return (
     <>
       {!hideNavbar && <Navbar />}
       <div>{children}</div>
     </>
-  );
+  )
 }
 
 function App() {
@@ -50,7 +49,6 @@ function App() {
     <BrowserRouter>
       <Layout>
         <Routes>
-
           {/* AUTH ROUTES (public) */}
           <Route path="/sign-in" element={<LoginPage />} />
           <Route path="/" element={<SignupPage />} />
@@ -71,7 +69,6 @@ function App() {
             element={
               <ProtectedRoute>
                 <ReceiptsListPage />
-                
               </ProtectedRoute>
             }
           />
@@ -162,6 +159,14 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/product-operations"
+            element={
+              <ProtectedRoute>
+                <ProductOperations />
+              </ProtectedRoute>
+            }
+          />
 
           {/* WAREHOUSES */}
           <Route
@@ -190,11 +195,10 @@ function App() {
               </ProtectedRoute>
             }
           />
-
         </Routes>
       </Layout>
     </BrowserRouter>
-  );
+  )
 }
 
-export default App;
+export default App
