@@ -1,17 +1,13 @@
-// pages/Warehouses/WarehouseSinglePage.jsx
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { 
+import React, { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import {
   ArrowLeft,
   Warehouse as WarehouseIcon,
   MapPin,
   Hash,
   Tag,
-  AlertCircle
-} from 'lucide-react';
-
-// Import your mock API functions
-import { getWarehouses } from '../../services/api';
+  AlertCircle,
+} from 'lucide-react'
 
 // Info Row Component
 const InfoRow = ({ icon: Icon, label, value, isLoading }) => (
@@ -28,7 +24,7 @@ const InfoRow = ({ icon: Icon, label, value, isLoading }) => (
       </div>
     )}
   </div>
-);
+)
 
 // Location Tag Component
 const LocationTag = ({ location, index }) => {
@@ -42,17 +38,19 @@ const LocationTag = ({ location, index }) => {
     'bg-indigo-100 text-indigo-700 border-indigo-200',
     'bg-teal-100 text-teal-700 border-teal-200',
     'bg-orange-100 text-orange-700 border-orange-200',
-  ];
+  ]
 
-  const colorClass = pastelColors[index % pastelColors.length];
+  const colorClass = pastelColors[index % pastelColors.length]
 
   return (
-    <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${colorClass}`}>
+    <div
+      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${colorClass}`}
+    >
       <MapPin size={14} />
       <span>{location}</span>
     </div>
-  );
-};
+  )
+}
 
 // Loading Skeleton
 const PageSkeleton = () => (
@@ -66,7 +64,7 @@ const PageSkeleton = () => (
     {/* Info Card Skeleton */}
     <div className="bg-white rounded-xl border border-[#D7CCC8] p-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {[1, 2, 3].map(i => (
+        {[1, 2, 3].map((i) => (
           <div key={i} className="space-y-2">
             <div className="h-4 bg-[#D7CCC8] rounded w-24 animate-pulse"></div>
             <div className="h-6 bg-[#D7CCC8] rounded w-40 animate-pulse"></div>
@@ -79,13 +77,16 @@ const PageSkeleton = () => (
     <div className="bg-white rounded-xl border border-[#D7CCC8] p-6">
       <div className="h-6 bg-[#D7CCC8] rounded w-32 animate-pulse mb-4"></div>
       <div className="flex flex-wrap gap-3">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="h-9 bg-[#D7CCC8] rounded-lg w-24 animate-pulse"></div>
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className="h-9 bg-[#D7CCC8] rounded-lg w-24 animate-pulse"
+          ></div>
         ))}
       </div>
     </div>
   </div>
-);
+)
 
 // Empty Locations State
 const EmptyLocationsState = () => (
@@ -94,47 +95,54 @@ const EmptyLocationsState = () => (
       <MapPin size={32} className="text-[#8D6E63]" />
     </div>
     <p className="text-sm text-[#5D4037] max-w-md leading-relaxed">
-      This section holds the multiple locations of this warehouse — rooms, racks, zones, and storage areas.
+      This section holds the multiple locations of this warehouse — rooms,
+      racks, zones, and storage areas.
     </p>
   </div>
-);
+)
 
 // Main Warehouse Details Page Component
 const WarehouseDetailsPage = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  
-  const [warehouse, setWarehouse] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const { id } = useParams()
+  const navigate = useNavigate()
+
+  const [warehouse, setWarehouse] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+
+  const API_BASE_URL = 'http://localhost:8000'
 
   useEffect(() => {
-    loadWarehouseData();
-  }, [id]);
+    loadWarehouseData()
+  }, [id])
 
   const loadWarehouseData = async () => {
-    setLoading(true);
-    setError(false);
+    setLoading(true)
+    setError(false)
     try {
-      const warehouses = await getWarehouses();
-      const foundWarehouse = warehouses.find(w => w.id === parseInt(id));
-      
+      // Fetch all warehouses and find the specific one
+      const response = await fetch(`${API_BASE_URL}/warehouses/`)
+      if (!response.ok) throw new Error('Failed to fetch warehouses')
+
+      const warehouses = await response.json()
+      const foundWarehouse = warehouses.find((w) => w.id === parseInt(id))
+
       if (!foundWarehouse) {
-        setError(true);
+        setError(true)
       } else {
-        setWarehouse(foundWarehouse);
+        setWarehouse(foundWarehouse)
       }
     } catch (error) {
-      console.error('Error loading warehouse:', error);
-      setError(true);
+      console.error('Error loading warehouse:', error)
+      setError(true)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleBack = () => {
-    navigate('/warehouses');
-  };
+    navigate('/warehouses')
+  }
 
   // Loading State
   if (loading) {
@@ -144,7 +152,7 @@ const WarehouseDetailsPage = () => {
           <PageSkeleton />
         </div>
       </div>
-    );
+    )
   }
 
   // Error State - Warehouse Not Found
@@ -160,7 +168,8 @@ const WarehouseDetailsPage = () => {
               Warehouse Not Found
             </h2>
             <p className="text-sm text-[#8D6E63] mb-6">
-              The warehouse you're looking for doesn't exist or has been removed.
+              The warehouse you're looking for doesn't exist or has been
+              removed.
             </p>
             <button
               onClick={handleBack}
@@ -172,17 +181,16 @@ const WarehouseDetailsPage = () => {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   // Get locations from warehouse data
-  const locations = warehouse.locations || [];
-  const warehouseCode = warehouse.warehouse_code || warehouse.short_code || '-';
+  const locations = warehouse.locations || []
+  const warehouseCode = warehouse.warehouse_code || warehouse.short_code || '-'
 
   return (
     <div className="w-full min-h-[calc(100vh-64px)] bg-[#FBF8F4] pt-16">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <button
@@ -199,9 +207,7 @@ const WarehouseDetailsPage = () => {
               <h1 className="text-2xl sm:text-3xl font-bold text-[#3E2723]">
                 {warehouse.name}
               </h1>
-              <p className="text-sm text-[#8D6E63] mt-0.5">
-                Warehouse Details
-              </p>
+              <p className="text-sm text-[#8D6E63] mt-0.5">Warehouse Details</p>
             </div>
           </div>
         </div>
@@ -212,34 +218,30 @@ const WarehouseDetailsPage = () => {
             <WarehouseIcon size={20} />
             Warehouse Information
           </h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <InfoRow 
+            <InfoRow
               icon={WarehouseIcon}
               label="Warehouse Name"
               value={warehouse.name}
             />
-            
-            <InfoRow 
+
+            <InfoRow
               icon={Tag}
               label="Short Code"
               value={warehouse.short_code}
             />
-            
-            <InfoRow 
-              icon={Hash}
-              label="Warehouse Code"
-              value={warehouseCode}
-            />
+
+            <InfoRow icon={Hash} label="Warehouse Code" value={warehouseCode} />
           </div>
 
           {/* Address if available */}
-          {warehouse.address && (
+          {(warehouse.address || warehouse.location) && (
             <div className="mt-6 pt-6 border-t border-[#D7CCC8]">
-              <InfoRow 
+              <InfoRow
                 icon={MapPin}
                 label="Address"
-                value={warehouse.address}
+                value={warehouse.address || warehouse.location}
               />
             </div>
           )}
@@ -251,24 +253,20 @@ const WarehouseDetailsPage = () => {
             <MapPin size={20} />
             Locations
           </h2>
-          
+
           {locations.length === 0 ? (
             <EmptyLocationsState />
           ) : (
             <div className="flex flex-wrap gap-3">
               {locations.map((location, index) => (
-                <LocationTag 
-                  key={index}
-                  location={location}
-                  index={index}
-                />
+                <LocationTag key={index} location={location} index={index} />
               ))}
             </div>
           )}
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default WarehouseDetailsPage;
+export default WarehouseDetailsPage
