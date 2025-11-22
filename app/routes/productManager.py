@@ -276,7 +276,9 @@ def update_cost_stock(
     if product_unit_cost is not None:
         if warehouse_id is None:
             # update all stock rows for this product
-            stocks = session.exec(select(Stock).where(Stock.product_id == product_id)).all()
+            stocks = session.exec(
+                select(Stock).where(Stock.product_id == product_id)
+            ).all()
             for s in stocks:
                 s.product_unit_cost = product_unit_cost
                 session.add(s)
@@ -287,7 +289,8 @@ def update_cost_stock(
         else:
             stock_item = session.exec(
                 select(Stock).where(
-                    (Stock.product_id == product_id) & (Stock.warehouse_id == warehouse_id)
+                    (Stock.product_id == product_id)
+                    & (Stock.warehouse_id == warehouse_id)
                 )
             ).first()
             if stock_item:
@@ -313,7 +316,9 @@ def update_cost_stock(
     # Update quantities (require warehouse)
     if on_hand is not None or free_to_use is not None:
         if warehouse_id is None:
-            raise HTTPException(status_code=400, detail="warehouse_id is required to update quantities")
+            raise HTTPException(
+                status_code=400, detail="warehouse_id is required to update quantities"
+            )
 
         stock_item = session.exec(
             select(Stock).where(
@@ -326,7 +331,9 @@ def update_cost_stock(
             stock_item = Stock(
                 warehouse_id=warehouse_id,
                 product_id=product_id,
-                product_unit_cost=product_unit_cost if product_unit_cost is not None else 0,
+                product_unit_cost=(
+                    product_unit_cost if product_unit_cost is not None else 0
+                ),
                 on_hand=on_hand if on_hand is not None else 0,
                 free_to_use=free_to_use if free_to_use is not None else 0,
             )
@@ -359,7 +366,7 @@ def update_cost_stock(
 
 @router.post("/create_internal_transfer/")
 def create_internal_transfer(
-    product: Product,
+    product_id: int,
     quantity: float,
     from_warehouse_id: int,
     to_warehouse_id: int,
@@ -401,18 +408,29 @@ def create_internal_transfer(
     print("Internal Transfer Transaction created:", internal_txn)
     # add in StockLedger
     ledger_entry = StockLedger(
+        product_id=product_id,
+        warehouse_id=from_warehouse_id,
+        quantity_change=-quantity,
+        created_at=datetime.utcnow(),
         transaction_id=internal_txn.id,
-        product_id=product.id,
-        from_warehouse_id=from_warehouse_id,
-        to_warehouse_id=to_warehouse_id,
-        quantity=quantity,
-        entry_date=datetime.utcnow(),
     )
+    ledger_entry2 = StockLedger(
+        product_id=product_id,
+        warehouse_id=to_warehouse_id,
+        quantity_change=quantity,
+        created_at=datetime.utcnow(),
+        transaction_id=internal_txn.id,
+    )
+    session.add(ledger_entry)
+    session.add(ledger_entry2)
+    session.commit()
+    session.refresh(ledger_entry)
+    print("Stock Ledger entry created for internal transfer:", ledger_entry)
     # update stock levels for both warehouses
     # Deduct from source warehouse
     source_stock = session.exec(
         select(Stock).where(
-            (Stock.product_id == product.id) & (Stock.warehouse_id == from_warehouse_id)
+            (Stock.product_id == product_id) & (Stock.warehouse_id == from_warehouse_id)
         )
     ).first()
     if not source_stock or source_stock.free_to_use < quantity:
@@ -425,7 +443,7 @@ def create_internal_transfer(
     # Add to destination warehouse
     dest_stock = session.exec(
         select(Stock).where(
-            (Stock.product_id == product.id) & (Stock.warehouse_id == to_warehouse_id)
+            (Stock.product_id == product_id) & (Stock.warehouse_id == to_warehouse_id)
         )
     ).first()
     if dest_stock:
@@ -435,7 +453,7 @@ def create_internal_transfer(
     else:
         dest_stock = Stock(
             warehouse_id=to_warehouse_id,
-            product_id=product.id,
+            product_id=product_id,
             on_hand=quantity,
             free_to_use=quantity,
         )
@@ -516,3 +534,6 @@ def get_stock_ledger(
         )
     ).all()
     return ledger_entries
+
+
+# get all stock and products in a warehouse

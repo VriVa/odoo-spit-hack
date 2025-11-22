@@ -1,6 +1,6 @@
-// pages/Receipts/ReceiptSinglePage.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { 
   ArrowLeft,
   Check,
@@ -11,38 +11,130 @@ import {
   Calendar,
   User,
   FileText,
-  Warehouse as WarehouseIcon
+  Warehouse as WarehouseIcon,
+  Loader2
 } from 'lucide-react';
 
-// Import your mock API functions
-import { 
-  getTransaction, 
-  getTransactionLines, 
-  getWarehouses, 
-  getProducts,
-  getUsers 
-} from '../../services/api';
+// --- API SERVICE LAYER (Integrated) ---
+
+const API_URL = 'http://localhost:8000';
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Error handling helper
+const handleApiError = (error) => {
+  if (error.response) {
+    throw new Error(error.response.data.detail || 'An error occurred');
+  } else if (error.request) {
+    throw new Error('No response from server. Please check your connection.');
+  } else {
+    throw new Error(error.message);
+  }
+};
+
+// Service Wrappers
+const receiptService = {
+  getById: async (id) => {
+    try {
+      // Note: Since backend doesn't have a specific GET /id endpoint yet,
+      // we fetch all receipts and filter client-side.
+      const response = await api.get('/dashboard/transactions', { 
+        params: { txn_type: 'receipt' } 
+      });
+      const receipt = response.data.find(t => t.id === parseInt(id));
+      if (!receipt) throw new Error('Receipt not found');
+      return receipt;
+    } catch (error) {
+      handleApiError(error);
+    }
+  },
+  validate: async (id) => {
+    try {
+      const response = await api.post(`/products/validate_transaction/${id}`);
+      return response.data;
+    } catch (error) {
+      handleApiError(error);
+    }
+  }
+};
+
+const warehouseService = {
+  getAll: async () => {
+    try {
+      const response = await api.get('/warehouses/');
+      return response.data;
+    } catch (error) {
+      // Return empty if failed to avoid page crash
+      console.warn("Failed to fetch warehouses", error);
+      return [];
+    }
+  },
+};
+
+const productService = {
+  getData: async () => {
+    try {
+      const response = await api.get('/products/');
+      // Backend returns [products, stock]
+      return { products: response.data[0] || [] };
+    } catch (error) {
+      console.warn("Failed to fetch products", error);
+      return { products: [] };
+    }
+  },
+};
+
+const userService = {
+  getAll: async () => {
+    try {
+      const response = await api.get('/users/');
+      return response.data;
+    } catch (error) {
+      console.warn("Failed to fetch users", error);
+      return [];
+    }
+  },
+};
+
+// --- COMPONENT CODE ---
 
 // Status Flow Component
 const StatusFlow = ({ currentStatus }) => {
+  // Map backend statuses to UI steps
+  // Backend: waiting (Ready), ready (Ready), done (Done)
   const steps = [
-    { key: 'draft', label: 'Draft' },
-    { key: 'ready', label: 'Ready' },
+    { key: 'draft', label: 'Draft' }, // 'waiting' acts as draft/ready in this logic
+    { key: 'ready', label: 'Ready' }, 
     { key: 'done', label: 'Done' }
   ];
+
+  // Normalize backend status to flow steps
+  const normalizeStatus = (status) => {
+    if (status === 'waiting') return 'draft'; // Treat waiting as first step
+    if (status === 'ready') return 'ready';
+    if (status === 'done') return 'done';
+    return 'draft';
+  };
+
+  const normalizedCurrent = normalizeStatus(currentStatus);
 
   const getStepIndex = (status) => {
     const index = steps.findIndex(s => s.key === status);
     return index !== -1 ? index : 0;
   };
 
-  const currentIndex = getStepIndex(currentStatus);
+  const currentIndex = getStepIndex(normalizedCurrent);
 
   return (
     <div className="flex items-center gap-2">
       {steps.map((step, index) => {
         const isActive = index <= currentIndex;
-        const isCurrent = step.key === currentStatus;
+        const isCurrent = step.key === normalizedCurrent;
         
         return (
           <React.Fragment key={step.key}>
@@ -87,20 +179,15 @@ const InfoRow = ({ icon: Icon, label, value, isLoading }) => (
 // Loading Skeleton
 const PageSkeleton = () => (
   <div className="space-y-6">
-    {/* Header Skeleton */}
     <div className="flex justify-between items-center">
       <div className="h-8 bg-[#D7CCC8] rounded w-48 animate-pulse"></div>
       <div className="h-10 bg-[#D7CCC8] rounded w-64 animate-pulse"></div>
     </div>
-
-    {/* Status Flow Skeleton */}
     <div className="flex gap-2">
       <div className="h-10 bg-[#D7CCC8] rounded w-24 animate-pulse"></div>
       <div className="h-10 bg-[#D7CCC8] rounded w-24 animate-pulse"></div>
       <div className="h-10 bg-[#D7CCC8] rounded w-24 animate-pulse"></div>
     </div>
-
-    {/* Info Card Skeleton */}
     <div className="bg-white rounded-xl border border-[#D7CCC8] p-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {[1, 2, 3, 4].map(i => (
@@ -111,8 +198,6 @@ const PageSkeleton = () => (
         ))}
       </div>
     </div>
-
-    {/* Products Skeleton */}
     <div className="bg-white rounded-xl border border-[#D7CCC8] p-6">
       <div className="h-6 bg-[#D7CCC8] rounded w-32 animate-pulse mb-4"></div>
       <div className="space-y-3">
@@ -129,12 +214,16 @@ const SingleReceiptPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
+  // State
   const [receipt, setReceipt] = useState(null);
   const [lines, setLines] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
   const [users, setUsers] = useState([]);
+  
+  // UI State
   const [loading, setLoading] = useState(true);
+  const [validating, setValidating] = useState(false);
 
   useEffect(() => {
     loadReceiptData();
@@ -143,19 +232,31 @@ const SingleReceiptPage = () => {
   const loadReceiptData = async () => {
     setLoading(true);
     try {
-      const [receiptData, linesData, warehousesData, productsData, usersData] = await Promise.all([
-        getTransaction(id),
-        getTransactionLines(id),
-        getWarehouses(),
-        getProducts(),
-        getUsers()
+      // Fetch all required data in parallel
+      const [receiptData, warehousesData, productData, usersData] = await Promise.all([
+        receiptService.getById(id),
+        warehouseService.getAll(),
+        productService.getData(),
+        userService.getAll()
       ]);
 
       setReceipt(receiptData);
-      setLines(linesData);
       setWarehouses(warehousesData);
-      setProducts(productsData);
+      setProducts(productData.products);
       setUsers(usersData);
+
+      // Construct "lines" from the single transaction entry
+      // Current backend MVP stores product/qty directly on the transaction
+      if (receiptData && receiptData.product_id) {
+        setLines([{
+          id: `line-${receiptData.id}`,
+          product_id: receiptData.product_id,
+          quantity: receiptData.quantity
+        }]);
+      } else {
+        setLines([]);
+      }
+
     } catch (error) {
       console.error('Error loading receipt:', error);
     } finally {
@@ -171,12 +272,12 @@ const SingleReceiptPage = () => {
 
   const getProductInfo = (productId) => {
     const product = products.find(p => p.id === productId);
-    return product ? `[${product.sku}] ${product.name}` : 'Unknown Product';
+    return product ? `[${product.sku || 'SKU'}] ${product.name}` : `Product #${productId}`;
   };
 
   const getUserName = (userId) => {
     const user = users.find(u => u.id === userId);
-    return user ? user.full_name : 'Unknown User';
+    return user ? (user.full_name || user.name) : 'System';
   };
 
   const formatDate = (dateString) => {
@@ -184,7 +285,7 @@ const SingleReceiptPage = () => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
       year: 'numeric', 
-      month: 'long', 
+      month: 'short', 
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
@@ -192,15 +293,20 @@ const SingleReceiptPage = () => {
   };
 
   // Actions
-  const handleValidate = () => {
-    setReceipt(prev => ({ ...prev, status: 'ready' }));
-    // In real app: call API to update status
-  };
-
-  const handleCancel = () => {
-    if (window.confirm('Are you sure you want to cancel this receipt?')) {
-      setReceipt(prev => ({ ...prev, status: 'canceled' }));
-      // In real app: call API to update status
+  const handleValidate = async () => {
+    if (!window.confirm('Are you sure you want to validate this receipt? This will update stock levels.')) return;
+    
+    setValidating(true);
+    try {
+      const updatedReceipt = await receiptService.validate(id);
+      setReceipt(updatedReceipt);
+      // Since validation updates stock, we don't strictly need to reload everything, 
+      // but updating the local receipt object is crucial.
+      alert("Receipt validated successfully! Stock has been updated.");
+    } catch (error) {
+      alert(`Validation failed: ${error.message}`);
+    } finally {
+      setValidating(false);
     }
   };
 
@@ -208,12 +314,8 @@ const SingleReceiptPage = () => {
     window.print();
   };
 
-  const handleAddProduct = () => {
-    navigate(`/receipts/${id}/add-line`);
-  };
-
   const handleBack = () => {
-    navigate('/receipts');
+    navigate('/operations/receipts');
   };
 
   if (loading) {
@@ -228,7 +330,7 @@ const SingleReceiptPage = () => {
 
   if (!receipt) {
     return (
-      <div className="w-full min-h-[calc(100vh-64px)] bg-[#FBF8F4] flex items-center justify-center">
+      <div className="w-full min-h-[calc(100vh-64px)] bg-[#FBF8F4] flex items-center justify-center pt-16">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-[#3E2723] mb-2">Receipt not found</h2>
           <button 
@@ -242,11 +344,12 @@ const SingleReceiptPage = () => {
     );
   }
 
-  const isCanceled = receipt.status === 'canceled';
-  const isDraft = receipt.status === 'draft';
+  const isCanceled = receipt.status === 'canceled'; // Backend doesn't have cancel yet, but good for future
+  const isReady = receipt.status === 'ready';
+  const isDone = receipt.status === 'done';
 
   return (
-    <div className="w-full min-h-[calc(100vh-64px)] bg-[#FBF8F4] pt-16">
+    <div className="w-full min-h-[calc(100vh-64px)] bg-[#FBF8F4] pt-16 md:pt-8">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         
         {/* Header */}
@@ -261,19 +364,20 @@ const SingleReceiptPage = () => {
             </button>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-[#3E2723]">Receipt</h1>
-              <p className="text-sm text-[#8D6E63] mt-0.5">{receipt.reference_number}</p>
+              <p className="text-sm text-[#8D6E63] mt-0.5">{receipt.reference_number || `ID: ${receipt.id}`}</p>
             </div>
           </div>
 
           {/* Right: Action buttons */}
           <div className="flex flex-wrap items-center gap-3">
-            {isDraft && !isCanceled && (
+            {isReady && !isCanceled && (
               <button
                 onClick={handleValidate}
-                className="flex items-center gap-2 px-4 py-2 bg-[#8E8D4F] text-white rounded-lg text-sm font-medium hover:bg-[#7A7842] transition-colors"
+                disabled={validating}
+                className="flex items-center gap-2 px-4 py-2 bg-[#8E8D4F] text-white rounded-lg text-sm font-medium hover:bg-[#7A7842] transition-colors disabled:opacity-50"
               >
-                <Check size={18} />
-                <span>Validate</span>
+                {validating ? <Loader2 size={18} className="animate-spin"/> : <Check size={18} />}
+                <span>{validating ? 'Validating...' : 'Validate'}</span>
               </button>
             )}
             
@@ -284,29 +388,12 @@ const SingleReceiptPage = () => {
               <Printer size={18} />
               <span>Print</span>
             </button>
-
-            {!isCanceled && (
-              <button
-                onClick={handleCancel}
-                className="flex items-center gap-2 px-4 py-2 bg-white text-[#A0493B] border border-[#A0493B] rounded-lg text-sm font-medium hover:bg-[#A0493B] hover:text-white transition-colors"
-              >
-                <X size={18} />
-                <span>Cancel</span>
-              </button>
-            )}
           </div>
         </div>
 
         {/* Status Flow */}
         <div className="mb-6">
-          {isCanceled ? (
-            <div className="inline-flex items-center px-4 py-2 bg-red-100 text-red-700 border border-red-300 rounded-lg text-sm font-medium">
-              <X size={16} className="mr-2" />
-              Canceled
-            </div>
-          ) : (
-            <StatusFlow currentStatus={receipt.status} />
-          )}
+          <StatusFlow currentStatus={receipt.status} />
         </div>
 
         {/* Receipt Information Card */}
@@ -328,7 +415,7 @@ const SingleReceiptPage = () => {
               <InfoRow 
                 icon={User}
                 label="Receive From"
-                value={receipt.contact}
+                value={receipt.contact || receipt.supplier || "Unknown Supplier"}
               />
               
               <InfoRow 
@@ -346,16 +433,18 @@ const SingleReceiptPage = () => {
                 value={formatDate(receipt.scheduled_date)}
               />
               
+              {/* Backend Receipt only has 'to_warehouse', from is External/Vendor usually */}
               <InfoRow 
                 icon={WarehouseIcon}
-                label="From Warehouse"
-                value={getWarehouseName(receipt.from_warehouse)}
-              />
-              
-              <InfoRow 
-                icon={WarehouseIcon}
-                label="To Warehouse"
+                label="Destination Warehouse"
                 value={getWarehouseName(receipt.to_warehouse)}
+              />
+
+               {/* Show status as text for clarity */}
+               <InfoRow 
+                icon={Check}
+                label="Status"
+                value={receipt.status.toUpperCase()}
               />
             </div>
           </div>
@@ -368,14 +457,11 @@ const SingleReceiptPage = () => {
               <Package size={20} />
               Products
             </h2>
-            {!isCanceled && (
-              <button
-                onClick={handleAddProduct}
-                className="flex items-center gap-2 px-4 py-2 bg-[#5D4037] text-[#F5F0EC] rounded-lg text-sm font-medium hover:bg-[#3E2723] transition-colors"
-              >
-                <Plus size={18} />
-                <span className="hidden sm:inline">New Product</span>
-              </button>
+            {/* Hide Add button if done or if we are in Single-Product-Mode MVP */}
+            {!isDone && !isCanceled && (
+              <div className="text-xs text-[#8D6E63] italic">
+                 (Editing lines not supported in this version)
+              </div>
             )}
           </div>
 
@@ -396,7 +482,7 @@ const SingleReceiptPage = () => {
                 {lines.length === 0 ? (
                   <tr>
                     <td colSpan="2" className="px-4 py-8 text-center text-sm text-[#8D6E63]">
-                      No products added yet
+                      No products found for this receipt
                     </td>
                   </tr>
                 ) : (
@@ -426,7 +512,7 @@ const SingleReceiptPage = () => {
           <div className="md:hidden space-y-3">
             {lines.length === 0 ? (
               <div className="text-center py-8 text-sm text-[#8D6E63]">
-                No products added yet
+                No products found
               </div>
             ) : (
               lines.map((line) => (
