@@ -9,6 +9,8 @@ import {
   ArrowRightLeft,
 } from 'lucide-react'
 
+// --- Configuration & Theme ---
+
 const STATUS_CONFIG = {
   draft: {
     label: 'Draft',
@@ -53,6 +55,8 @@ const theme = {
   outColor: '#D32F2F',
   transferColor: '#1976D2',
 }
+
+// --- Helper Components ---
 
 const SkeletonRow = () => (
   <tr className="animate-pulse">
@@ -131,7 +135,9 @@ const DirectionIndicator = ({ fromId, toId }) => {
   )
 }
 
-const MoveHistoryPage = () => {
+// --- Main Component ---
+
+const App = () => {
   const [transactions, setTransactions] = useState([])
   const [warehouses, setWarehouses] = useState([])
   const [products, setProducts] = useState([])
@@ -150,6 +156,8 @@ const MoveHistoryPage = () => {
         const txResponse = await fetch(
           `${API_BASE_URL}/dashboard/transactions?txn_type=internal_adjustment`
         )
+        // Handle potential errors if backend is not reachable in preview
+        if (!txResponse.ok) throw new Error('Backend not reachable')
         const txData = await txResponse.json()
 
         // 2. Fetch Warehouses
@@ -168,6 +176,9 @@ const MoveHistoryPage = () => {
         setProducts(prodData)
       } catch (err) {
         console.error('Failed to fetch data:', err)
+        // For preview purposes only - if fetch fails, we stop loading to show empty state or error
+        // In a real scenario, you might want to show an error message
+        setLoading(false)
       } finally {
         setLoading(false)
       }
@@ -202,7 +213,9 @@ const MoveHistoryPage = () => {
         reference: tx.reference_number,
         date: tx.scheduled_date
           ? new Date(tx.scheduled_date).toLocaleDateString()
-          : '-',
+          : tx.created_at
+          ? new Date(tx.created_at).toLocaleDateString()
+          : 'N/A',
         contact: tx.contact || 'Internal',
         fromWarehouseId: tx.from_warehouse,
         toWarehouseId: tx.to_warehouse,
@@ -519,4 +532,4 @@ const MoveHistoryPage = () => {
   )
 }
 
-export default MoveHistoryPage
+export default App

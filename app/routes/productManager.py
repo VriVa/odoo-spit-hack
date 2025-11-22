@@ -401,6 +401,8 @@ def create_internal_transfer(
         scheduled_date=scheduled_date,
         contact="Internal Transfer",
         created_by=user_id,
+        product_id=product_id,
+        quantity=quantity,
     )
     session.add(internal_txn)
     session.commit()
