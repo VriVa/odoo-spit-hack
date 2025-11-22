@@ -20,7 +20,7 @@ export default function SignupPage() {
             
 
             {/* Clerk Sign Up Component */}
-            <SignUp path="/sign-up" routing="path" />
+            <SignUp path="/" routing="path" />
           </div>
         </div>
 

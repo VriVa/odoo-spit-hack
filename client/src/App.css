@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-<<<<<<< Updated upstream
 :root {
   /* Primary Palette */
   --color-primary-dark: #3E2723;
@@ -68,9 +67,4 @@
   --navbar-height: 64px;
   --sidebar-width: 260px;
   --container-max-width: 1400px;
-=======
-body {
-  margin: 0;
-  padding: 0;
->>>>>>> Stashed changes
 }
