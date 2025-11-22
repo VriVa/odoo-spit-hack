@@ -7,6 +7,7 @@ import {
   Search,
   Package,
   ArrowRightLeft,
+  Plus,
 } from 'lucide-react'
 
 // --- Configuration & Theme ---
@@ -213,9 +214,7 @@ const App = () => {
         reference: tx.reference_number,
         date: tx.scheduled_date
           ? new Date(tx.scheduled_date).toLocaleDateString()
-          : tx.created_at
-          ? new Date(tx.created_at).toLocaleDateString()
-          : 'N/A',
+          : '-',
         contact: tx.contact || 'Internal',
         fromWarehouseId: tx.from_warehouse,
         toWarehouseId: tx.to_warehouse,
@@ -489,6 +488,18 @@ const App = () => {
                 }}
               />
             </div>
+
+            <button
+              onClick={() =>
+                (window.location.href = '/create-internal-transfer')
+              }
+              className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-white shadow-sm hover:shadow-md transition-all"
+              style={{ backgroundColor: theme.transferColor }}
+            >
+              <Plus size={18} />
+              New Transfer
+            </button>
+
             <button
               onClick={() =>
                 setViewMode(viewMode === 'list' ? 'kanban' : 'list')

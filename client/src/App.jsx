@@ -30,6 +30,7 @@ import WarehouseDetailsPage from './pages/Warehouse/WarehouseDetailsPage'
 import ReceiptsNew from './pages/Receipts/ReceiptsNew'
 import DeliveryNew from './pages/Delivery/DeliveryNew'
 import ProductOperations from './pages/Stock/ProductOperations'
+import CreateInternalTransfer from './pages/MoveHistory/CreateInternalTransfer'
 // Layout wrapper (hide navbar on login/signup)
 function Layout({ children }) {
   const location = useLocation()
@@ -182,6 +183,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <WarehouseDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/create-internal-transfer"
+            element={
+              <ProtectedRoute>
+                <CreateInternalTransfer />
               </ProtectedRoute>
             }
           />
