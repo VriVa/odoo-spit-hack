@@ -79,7 +79,6 @@ class Transaction(SQLModel, table=True):
     supplier: Optional[str] = None
     delivery_address: Optional[str] = None
     contact: Optional[str] = None
-
     created_by: Optional[int] = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
