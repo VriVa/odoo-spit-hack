@@ -1,5 +1,10 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
+import ProtectedRoute from "./components/ProtectedRoute";
+
+// Auth pages
+import LoginPage from "./pages/Auth/LoginPage";
+import SignupPage from "./pages/Auth/SignupPage";
 
 // Pages
 import DashboardPage from "./pages/Dashboard/DashboardPage";
@@ -24,49 +29,167 @@ import WarehouseListPage from "./pages/Warehouse/WarehouseListPage";
 import WarehouseDetailsPage from "./pages/Warehouse/WarehouseDetailsPage";
 import ReceiptsNew from "./pages/Receipts/ReceiptsNew";
 import DeliveryNew from "./pages/Delivery/DeliveryNew";
+// Layout wrapper (hide navbar on login/signup)
+function Layout({ children }) {
+  const location = useLocation();
+  const hideNavbar = ["/sign-in", "/sign-up"].includes(location.pathname);
+
+  return (
+    <>
+      {!hideNavbar && <Navbar />}
+      <div className="p-4">{children}</div>
+    </>
+  );
+}
 
 function App() {
   return (
     <BrowserRouter>
-      <Navbar />
-
-      <div className="p-4">
+      <Layout>
         <Routes>
 
-          {/* Dashboard */}
-          <Route path="/" element={<DashboardPage />} />
+          {/* AUTH ROUTES (public) */}
+          <Route path="/sign-in" element={<LoginPage />} />
+          <Route path="/sign-up" element={<SignupPage />} />
 
-          {/* Receipts */}
-          <Route path="/receipts" element={<ReceiptsListPage />} />
-          <Route path="/receipts/:id" element={<SingleReceiptPage />} />
-          <Route path="/receipts/new" element={<ReceiptsNew />} />
-          
+          {/* DASHBOARD */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Deliveries */}
-          <Route path="/deliveries" element={<DeliveryListPage />} />
-          <Route path="/deliveries/:id" element={<SingleDeliveryPage />} />
-          <Route path="/deliveries/new" element={<DeliveryNew />} />
+          {/* RECEIPTS */}
+          <Route
+            path="/receipts"
+            element={
+              <ProtectedRoute>
+                <ReceiptsListPage />
+                
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/receipts/:id"
+            element={
+              <ProtectedRoute>
+                <SingleReceiptPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/receipts/new"
+            element={
+              <ProtectedRoute>
+                <ReceiptsNew />
+              </ProtectedRoute>
+            }
+          />
+          {/* DELIVERIES */}
+          <Route
+            path="/deliveries"
+            element={
+              <ProtectedRoute>
+                <DeliveryListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/deliveries/new"
+            element={
+              <ProtectedRoute>
+                <DeliveryNew />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/deliveries/:id"
+            element={
+              <ProtectedRoute>
+                <SingleDeliveryPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Adjustments */}
-          <Route path="/adjustments" element={<AdjustmentsListPage />} />
-          <Route path="/adjustments/:id" element={<SingleAdjustmentPage />} />
+          {/* ADJUSTMENTS */}
+          <Route
+            path="/adjustments"
+            element={
+              <ProtectedRoute>
+                <AdjustmentsListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/adjustments/:id"
+            element={
+              <ProtectedRoute>
+                <SingleAdjustmentPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Move History */}
-          <Route path="/move-history" element={<MoveHistoryPage />} />
+          {/* MOVE HISTORY */}
+          <Route
+            path="/move-history"
+            element={
+              <ProtectedRoute>
+                <MoveHistoryPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Stock */}
-          <Route path="/stock" element={<StockListPage />} />
-          <Route path="/stock/operations/:id" element={<StockOperationsPage />} />
+          {/* STOCK */}
+          <Route
+            path="/stock"
+            element={
+              <ProtectedRoute>
+                <StockListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/stock/operations/:id"
+            element={
+              <ProtectedRoute>
+                <StockOperationsPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Warehouses */}
-          <Route path="/warehouses" element={<WarehouseListPage />} />
-          <Route path="/warehouses/:id" element={<WarehouseDetailsPage />} />
+          {/* WAREHOUSES */}
+          <Route
+            path="/warehouses"
+            element={
+              <ProtectedRoute>
+                <WarehouseListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/warehouses/:id"
+            element={
+              <ProtectedRoute>
+                <WarehouseDetailsPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Settings */}
-          <Route path="/settings" element={<SettingsPage />} />
+          {/* SETTINGS */}
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
 
         </Routes>
-      </div>
+      </Layout>
     </BrowserRouter>
   );
 }

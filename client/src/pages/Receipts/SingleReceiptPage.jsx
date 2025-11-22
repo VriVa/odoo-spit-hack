@@ -1,9 +1,9 @@
 import React from 'react'
 
-const SingleRecieptPage = () => {
+const SingleReceiptPage = () => {
   return (
-    <div>SingleRecieptPage</div>
+    <div>SingleReceiptPage</div>
   )
 }
 
-export default SingleRecieptPage
+export default SingleReceiptPage

@@ -1,9 +1,9 @@
 import React from 'react'
 
-const RecieptsListPage = () => {
+const ReceiptsListPage = () => {
   return (
-    <div>RecieptsListPage</div>
+    <div>ReceiptsListPage</div>
   )
 }
 
-export default RecieptsListPage
+export default ReceiptsListPage
