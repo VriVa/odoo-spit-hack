@@ -2,12 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-<<<<<<< HEAD
-body {
-  margin: 0;
-  padding: 0;
-}
-=======
 :root {
   /* Primary Palette */
   --color-primary-dark: #3E2723;
@@ -74,4 +68,3 @@ body {
   --sidebar-width: 260px;
   --container-max-width: 1400px;
 }
->>>>>>> f7497888df9e20444401208aff79c72b1ecd3614
