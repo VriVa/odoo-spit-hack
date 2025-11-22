@@ -33,6 +33,7 @@ class User(SQLModel, table=True):
         sa_column=Column(Enum(UserRole)), default=UserRole.warehouse_staff
     )
     clerk_id: Optional[int] = None
+    warehouse_id: Optional[int] = Field(foreign_key="warehouse.id")
 
 
 class Warehouse(SQLModel, table=True):
@@ -71,9 +72,12 @@ class Transaction(SQLModel, table=True):
     scheduled_date: Optional[datetime] = None
     completion_date: Optional[datetime] = None
     reference_number: Optional[str] = None
-
+    product_id: Optional[int] = Field(foreign_key="product.id")
+    quantity: Optional[float] = None
     from_warehouse: Optional[int] = Field(foreign_key="warehouse.id")
     to_warehouse: Optional[int] = Field(foreign_key="warehouse.id")
+    supplier: Optional[str] = None
+    delivery_address: Optional[str] = None
     contact: Optional[str] = None
 
     created_by: Optional[int] = Field(foreign_key="user.id")

@@ -12,7 +12,8 @@ router = APIRouter(prefix="/products", tags=["products"])
 @router.get("/")
 def read_products(session: Session = Depends(get_session)):
     products = session.exec(select(Product)).all()
-    return products
+    stock = session.exec(select(Stock)).all()
+    return products, stock
 
 
 class ProductStockResponse(SQLModel):
@@ -62,8 +63,8 @@ def create_product(
 
 @router.post("/create_receipt/")
 def create_receipt(
-    product: Product,
-    warehouse_id: int,
+    product_id: int,
+    supplier: str,
     quantity: float,
     to_warehouse_id: int,
     scheduled_date: Optional[datetime] = None,
@@ -86,16 +87,18 @@ def create_receipt(
         )
     except AttributeError:
         last_id_of_receipt_txn = 0
-    reference_number = f"{warehouse_id}/IN/{last_id_of_receipt_txn + 1}"
+    reference_number = f"{to_warehouse_id}/IN/{last_id_of_receipt_txn + 1}"
     receipt_txn = Transaction(
         type=type_txn,
         status=TxnStatus.ready,
-        from_warehouse=warehouse_id,
+        supplier=supplier,
         to_warehouse=to_warehouse_id,
         reference_number=reference_number,
         scheduled_date=scheduled_date,
         contact="Supplier XYZ",
         created_by=user_id,
+        product_id=product_id,
+        quantity=quantity,
     )
     session.add(receipt_txn)
     session.commit()
@@ -116,15 +119,15 @@ def create_receipt(
 
 @router.post("/create_delivery_order/")
 def create_delivery_order(
-    product: Product,
-    warehouse_id: int,
+    product_id: int,
     quantity: float,
     from_warehouse_id: int,
     scheduled_date: Optional[datetime] = None,
     user_id: int = None,
     session: Session = Depends(get_session),
+    delivery_address: Optional[str] = None,
 ):
-    type_txn = TxnType.delivery_order
+    type_txn = TxnType.delivery
     try:
         last_id_of_delivery_txn = (
             session.exec(
@@ -140,16 +143,18 @@ def create_delivery_order(
         )
     except AttributeError:
         last_id_of_delivery_txn = 0
-    reference_number = f"{warehouse_id}/OUT/{last_id_of_delivery_txn + 1}"
+    reference_number = f"{from_warehouse_id}/OUT/{last_id_of_delivery_txn + 1}"
     delivery_txn = Transaction(
         type=type_txn,
         status=TxnStatus.ready,
         from_warehouse=from_warehouse_id,
-        to_warehouse=warehouse_id,
         reference_number=reference_number,
         scheduled_date=scheduled_date,
         contact="Customer ABC",
         created_by=user_id,
+        product_id=product_id,
+        quantity=quantity,
+        delivery_address=delivery_address,
     )
     session.add(delivery_txn)
     session.commit()
@@ -164,6 +169,7 @@ def validate_transaction(
     session: Session = Depends(get_session),
 ):
     transaction = session.get(Transaction, transaction_id)
+    # print(type(transaction.quantity))
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
@@ -173,16 +179,9 @@ def validate_transaction(
         )
 
     # dont use transaction lines for now, just assume one product per transaction
-    product_id = session.exec(
-        select(TransactionLine.product_id).where(
-            TransactionLine.transaction_id == transaction_id
-        )
-    ).first()
-    quantity = session.exec(
-        select(TransactionLine.quantity).where(
-            TransactionLine.transaction_id == transaction_id
-        )
-    ).first()
+    # get product id from transaction id
+    product_id = transaction.product_id
+    quantity = transaction.quantity
     if transaction.type == TxnType.receipt:
         stock = session.exec(
             select(Stock).where(
@@ -191,8 +190,9 @@ def validate_transaction(
             )
         ).first()
         if stock:
-            stock.on_hand += quantity
-            stock.free_to_use += quantity
+            print("Existing stock found:", stock)
+            stock.on_hand += float(quantity)
+            stock.free_to_use += float(quantity)
             session.add(stock)
         else:
             stock = Stock(
@@ -208,7 +208,7 @@ def validate_transaction(
         session.refresh(transaction)
         print("Receipt transaction validated and stock updated:", transaction)
         return transaction
-    elif transaction.type == TxnType.delivery_order:
+    elif transaction.type == TxnType.delivery:
         stock = session.exec(
             select(Stock).where(
                 (Stock.product_id == product_id)
@@ -312,6 +312,39 @@ def create_internal_transfer(
         quantity=quantity,
         entry_date=datetime.utcnow(),
     )
+    # update stock levels for both warehouses
+    # Deduct from source warehouse
+    source_stock = session.exec(
+        select(Stock).where(
+            (Stock.product_id == product.id) & (Stock.warehouse_id == from_warehouse_id)
+        )
+    ).first()
+    if not source_stock or source_stock.free_to_use < quantity:
+        raise HTTPException(
+            status_code=400, detail="Insufficient stock for internal transfer"
+        )
+    source_stock.on_hand -= quantity
+    source_stock.free_to_use -= quantity
+    session.add(source_stock)
+    # Add to destination warehouse
+    dest_stock = session.exec(
+        select(Stock).where(
+            (Stock.product_id == product.id) & (Stock.warehouse_id == to_warehouse_id)
+        )
+    ).first()
+    if dest_stock:
+        dest_stock.on_hand += quantity
+        dest_stock.free_to_use += quantity
+        session.add(dest_stock)
+    else:
+        dest_stock = Stock(
+            warehouse_id=to_warehouse_id,
+            product_id=product.id,
+            on_hand=quantity,
+            free_to_use=quantity,
+        )
+        session.add(dest_stock)
+
     session.add(ledger_entry)
     session.commit()
     session.refresh(ledger_entry)
