@@ -252,6 +252,102 @@ def get_all_deliveries(warehouse_id: int, session: Session = Depends(get_session
     return deliveries
 
 
+@router.post("/update_cost_stock/")
+def update_cost_stock(
+    product_id: int,
+    warehouse_id: int | None = None,
+    product_unit_cost: float | None = None,
+    on_hand: float | None = None,
+    free_to_use: float | None = None,
+    session: Session = Depends(get_session),
+):
+    """Update a product's unit cost and/or stock quantities.
+
+    - `product_unit_cost` (optional): if provided and `warehouse_id` omitted, updates cost for all
+      stock records of the product. If `warehouse_id` provided, updates/creates the stock row for that warehouse.
+    - `on_hand` / `free_to_use` (optional): quantity updates. These require `warehouse_id` to be provided.
+      If the stock row for the given warehouse does not exist it will be created.
+
+    Returns the updated/created Stock records.
+    """
+    updated = []
+
+    # Update unit cost
+    if product_unit_cost is not None:
+        if warehouse_id is None:
+            # update all stock rows for this product
+            stocks = session.exec(select(Stock).where(Stock.product_id == product_id)).all()
+            for s in stocks:
+                s.product_unit_cost = product_unit_cost
+                session.add(s)
+            session.commit()
+            for s in stocks:
+                session.refresh(s)
+                updated.append(s)
+        else:
+            stock_item = session.exec(
+                select(Stock).where(
+                    (Stock.product_id == product_id) & (Stock.warehouse_id == warehouse_id)
+                )
+            ).first()
+            if stock_item:
+                stock_item.product_unit_cost = product_unit_cost
+                session.add(stock_item)
+                session.commit()
+                session.refresh(stock_item)
+                updated.append(stock_item)
+            else:
+                # create new stock row with provided cost
+                new_stock = Stock(
+                    warehouse_id=warehouse_id,
+                    product_id=product_id,
+                    product_unit_cost=product_unit_cost,
+                    on_hand=0,
+                    free_to_use=0,
+                )
+                session.add(new_stock)
+                session.commit()
+                session.refresh(new_stock)
+                updated.append(new_stock)
+
+    # Update quantities (require warehouse)
+    if on_hand is not None or free_to_use is not None:
+        if warehouse_id is None:
+            raise HTTPException(status_code=400, detail="warehouse_id is required to update quantities")
+
+        stock_item = session.exec(
+            select(Stock).where(
+                (Stock.product_id == product_id) & (Stock.warehouse_id == warehouse_id)
+            )
+        ).first()
+
+        if not stock_item:
+            # create new stock record with provided quantities
+            stock_item = Stock(
+                warehouse_id=warehouse_id,
+                product_id=product_id,
+                product_unit_cost=product_unit_cost if product_unit_cost is not None else 0,
+                on_hand=on_hand if on_hand is not None else 0,
+                free_to_use=free_to_use if free_to_use is not None else 0,
+            )
+            session.add(stock_item)
+            session.commit()
+            session.refresh(stock_item)
+            updated.append(stock_item)
+        else:
+            if on_hand is not None:
+                stock_item.on_hand = on_hand
+            if free_to_use is not None:
+                stock_item.free_to_use = free_to_use
+            # If product_unit_cost was provided earlier for same warehouse, it will already be set
+            session.add(stock_item)
+            session.commit()
+            session.refresh(stock_item)
+            updated.append(stock_item)
+
+    return updated
+
+
 # 4. Internal Transfers
 # Move stock inside the company:
 # Example:
