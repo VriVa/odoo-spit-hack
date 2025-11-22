@@ -32,7 +32,10 @@ import DeliveryNew from "./pages/Delivery/DeliveryNew";
 // Layout wrapper (hide navbar on login/signup)
 function Layout({ children }) {
   const location = useLocation();
-  const hideNavbar = ["/sign-in", "/sign-up"].includes(location.pathname);
+  const hideNavbar =
+  location.pathname === "/" || 
+  location.pathname.startsWith("/sign-in");
+
 
   return (
     <>
@@ -50,11 +53,11 @@ function App() {
 
           {/* AUTH ROUTES (public) */}
           <Route path="/sign-in" element={<LoginPage />} />
-          <Route path="/sign-up" element={<SignupPage />} />
+          <Route path="/" element={<SignupPage />} />
 
           {/* DASHBOARD */}
           <Route
-            path="/"
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <DashboardPage />

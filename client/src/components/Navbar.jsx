@@ -22,7 +22,7 @@ const Navbar = ({ currentRoute, userName = "User", notifications = 0 }) => {
   const { signOut } = useClerk();
 
   const navLinks = [
-    { icon: LayoutDashboard, to: '/', label: 'Dashboard' },
+    { icon: LayoutDashboard, to: '/dashboard', label: 'Dashboard' },
     { icon: PackageCheck, to: '/receipts', label: 'Receipts' },
     { icon: Truck, to: '/deliveries', label: 'Deliveries' },
     { icon: FileEdit, to: '/adjustments', label: 'Adjustments' },
