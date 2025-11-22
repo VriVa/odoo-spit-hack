@@ -1,7 +1,22 @@
 from fastapi import FastAPI
 from app.models.create_db import create_db_and_tables
 
+# enable cors
+from fastapi.middleware.cors import CORSMiddleware
+
+# allow all origins for development purposes
+origins = ["*"]
+
+
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")

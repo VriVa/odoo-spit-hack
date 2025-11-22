@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Truck, Plus, Search, ChevronRight } from 'lucide-react';
-import { getTransactionsByType, getWarehouses } from '../../services/api';
+import React, { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Truck, Plus, Search, ChevronRight } from 'lucide-react'
 
 const STATUS_CONFIG = {
   draft: { label: 'Draft', bg: 'bg-gray-100', text: 'text-gray-700' },
@@ -9,7 +8,7 @@ const STATUS_CONFIG = {
   ready: { label: 'Ready', bg: 'bg-amber-100', text: 'text-amber-700' },
   done: { label: 'Done', bg: 'bg-green-100', text: 'text-green-700' },
   canceled: { label: 'Canceled', bg: 'bg-red-100', text: 'text-red-700' },
-};
+}
 
 const theme = {
   bg: '#FBF8F4',
@@ -18,26 +17,32 @@ const theme = {
   textLight: '#8D6E63',
   border: '#D7CCC8',
   card: '#FFFFFF',
-};
+}
 
 const StatusChip = ({ status }) => {
-  const config = STATUS_CONFIG[status] || STATUS_CONFIG.draft;
+  const normalizedStatus = status ? status.toLowerCase() : 'draft'
+  const config = STATUS_CONFIG[normalizedStatus] || STATUS_CONFIG.draft
   return (
-    <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${config.bg} ${config.text}`}>
+    <span
+      className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${config.bg} ${config.text}`}
+    >
       {config.label}
     </span>
-  );
-};
+  )
+}
 
 const SkeletonRow = () => (
   <tr className="animate-pulse">
-    {Array.from({ length: 6 }).map((_, i) => (
+    {Array.from({ length: 7 }).map((_, i) => (
       <td key={i} className="px-4 py-4">
-        <div className="h-4 rounded" style={{ backgroundColor: theme.border }} />
+        <div
+          className="h-4 rounded"
+          style={{ backgroundColor: theme.border }}
+        />
       </td>
     ))}
   </tr>
-);
+)
 
 const EmptyState = () => (
   <div className="flex flex-col items-center justify-center py-16">
@@ -54,63 +59,71 @@ const EmptyState = () => (
       Try adjusting your search or create a new delivery
     </p>
   </div>
-);
+)
 
 const DeliveriesListPage = () => {
-  const navigate = useNavigate();
-  const [deliveries, setDeliveries] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate()
+  const [deliveries, setDeliveries] = useState([])
+  const [warehouses, setWarehouses] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const API_BASE_URL = 'http://localhost:8000'
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true);
-        const [deliveryData, warehouseData] = await Promise.all([
-          getTransactionsByType('delivery'),
-          getWarehouses(),
-        ]);
-        setDeliveries(deliveryData);
-        setWarehouses(warehouseData);
+        setLoading(true)
+
+        // 1. Fetch Deliveries
+        const deliveryResponse = await fetch(
+          `${API_BASE_URL}/dashboard/transactions?txn_type=delivery`
+        )
+        const deliveryData = await deliveryResponse.json()
+
+        // 2. Fetch Warehouses (needed for the 'From' column)
+        const warehouseResponse = await fetch(`${API_BASE_URL}/warehouses/`)
+        const warehouseData = await warehouseResponse.json()
+
+        setDeliveries(deliveryData)
+        setWarehouses(warehouseData)
       } catch (err) {
-        console.error('Failed to fetch deliveries:', err);
+        console.error('Failed to fetch deliveries:', err)
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
-    fetchData();
-  }, []);
+    }
+    fetchData()
+  }, [])
 
   const warehouseMap = useMemo(() => {
     return warehouses.reduce((acc, wh) => {
-      acc[wh.id] = wh.name;
-      return acc;
-    }, {});
-  }, [warehouses]);
+      acc[wh.id] = wh.name
+      return acc
+    }, {})
+  }, [warehouses])
 
   const filteredDeliveries = useMemo(() => {
-    if (!searchQuery.trim()) return deliveries;
-    const query = searchQuery.toLowerCase();
+    if (!searchQuery.trim()) return deliveries
+    const query = searchQuery.toLowerCase()
     return deliveries.filter(
       (delivery) =>
         delivery.reference_number?.toLowerCase().includes(query) ||
         delivery.contact?.toLowerCase().includes(query)
-    );
-  }, [deliveries, searchQuery]);
+    )
+  }, [deliveries, searchQuery])
 
   const handleRowClick = (id) => {
-    navigate(`/deliveries/${id}`);
-  };
+    navigate(`/deliveries/${id}`)
+  }
 
   const handleNewDelivery = () => {
-    navigate('/deliveries/new');
-  };
+    navigate('/deliveries/new')
+  }
 
   return (
     <div className="w-full h-screen bg-[#FBF8F4] pt-16">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
@@ -212,7 +225,9 @@ const DeliveriesListPage = () => {
               </thead>
               <tbody>
                 {loading ? (
-                  Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <SkeletonRow key={i} />
+                  ))
                 ) : filteredDeliveries.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
@@ -225,32 +240,50 @@ const DeliveriesListPage = () => {
                       key={delivery.id}
                       onClick={() => handleRowClick(delivery.id)}
                       className="border-t cursor-pointer transition-colors hover:bg-[#FBF8F4]"
-                      style={{
-                        borderColor: theme.border,
-                      }}
+                      style={{ borderColor: theme.border }}
                     >
                       <td className="px-4 py-4">
-                        <span className="font-medium" style={{ color: theme.text }}>
+                        <span
+                          className="font-medium"
+                          style={{ color: theme.text }}
+                        >
                           {delivery.reference_number}
                         </span>
                       </td>
-                      <td className="px-4 py-4" style={{ color: theme.textMedium }}>
+                      <td
+                        className="px-4 py-4"
+                        style={{ color: theme.textMedium }}
+                      >
                         {warehouseMap[delivery.from_warehouse] || '-'}
                       </td>
-                      <td className="px-4 py-4" style={{ color: theme.textMedium }}>
-                        {warehouseMap[delivery.to_warehouse] || '-'}
+                      <td
+                        className="px-4 py-4"
+                        style={{ color: theme.textMedium }}
+                      >
+                        {/* Display delivery address instead of warehouse ID */}
+                        {delivery.delivery_address || '-'}
                       </td>
                       <td className="px-4 py-4" style={{ color: theme.text }}>
                         {delivery.contact}
                       </td>
-                      <td className="px-4 py-4" style={{ color: theme.textMedium }}>
-                        {delivery.scheduled_date}
+                      <td
+                        className="px-4 py-4"
+                        style={{ color: theme.textMedium }}
+                      >
+                        {delivery.scheduled_date
+                          ? new Date(
+                              delivery.scheduled_date
+                            ).toLocaleDateString()
+                          : '-'}
                       </td>
                       <td className="px-4 py-4">
                         <StatusChip status={delivery.status} />
                       </td>
                       <td className="px-4 py-4">
-                        <ChevronRight size={18} style={{ color: theme.textLight }} />
+                        <ChevronRight
+                          size={18}
+                          style={{ color: theme.textLight }}
+                        />
                       </td>
                     </tr>
                   ))
@@ -265,13 +298,14 @@ const DeliveriesListPage = () => {
               className="px-4 py-3 border-t text-sm"
               style={{ borderColor: theme.border, color: theme.textLight }}
             >
-              Showing {filteredDeliveries.length} of {deliveries.length} deliveries
+              Showing {filteredDeliveries.length} of {deliveries.length}{' '}
+              deliveries
             </div>
           )}
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default DeliveriesListPage;
+export default DeliveriesListPage
