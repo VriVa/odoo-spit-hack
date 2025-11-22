@@ -37,7 +37,7 @@ function Layout({ children }) {
   return (
     <>
       {!hideNavbar && <Navbar />}
-      <div className="p-4">{children}</div>
+      <div>{children}</div>
     </>
   );
 }

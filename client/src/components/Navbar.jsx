@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 import { SignedIn, useClerk } from "@clerk/clerk-react";
-import { Link } from "react-router-dom";  // <-- ADD THIS
+import { Link } from "react-router-dom";  
 
 const Navbar = ({ currentRoute, userName = "User", notifications = 0 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
